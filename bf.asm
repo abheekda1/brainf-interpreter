@@ -1,8 +1,7 @@
 section .data
-  path_req db "path of file: "
-  path_req_len equ $-path_req
-  test_filename db "hello.bf", 0x0
-bufsize dw 1024
+  not_enough_arg_text db "please add the bf path as an argument!",0x0,0x0a
+  not_enough_arg_len equ $-not_enough_arg_text ; 40
+  bufsize dw 1024
 
   O_RDONLY equ 0
   O_WRONLY equ 1
@@ -12,6 +11,9 @@ bufsize dw 1024
 
   FALSE equ 0
   TRUE  equ 1
+
+  EXIT_SUCCESS equ 0
+  EXIT_FAILURE equ 1
 
 section .bss
   path  resb 16
@@ -27,21 +29,46 @@ section .bss
 
   num_to_match_right_bracket resb 1
 
+  argc    resb 1
+  bf_file resb 16 ; max file name length is 16
+
 section .text
   global _start ; define entrypoint for ld
 
 _start:
+  pop rsi ; get argc
+  cmp rsi, 2
+  jl  _not_enough_args
+  pop rcx ; discard program name
+
   mov byte [left_bracket_sp], 0
   mov byte [num_to_match_right_bracket], 0
 
+  pop rdi ; get first argument for _open_file
+  push rdi
+  push rcx
+  push rsi ; ^^^ restore stack
   call _open_file
   call _read_file_data
   call _print_file_data
   call _execute_code
 
+  mov rdi, EXIT_SUCCESS
+  jmp _exit
+
+_not_enough_args:
+  mov rax, 1 ; sys_write
+  mov rdi, 1 ; stdout
+  mov rsi, not_enough_arg_text
+  mov rdx, not_enough_arg_len
+  syscall
+  mov rdi, EXIT_FAILURE
+  jmp _exit
+
+_exit:
   ; exit
   mov rax, 60 ; sys_exit
-  mov rdi, 0 ; code 0
+  ; mov rdi, 0 ; code 0 (set earlier)
   syscall
 
 _execute_code:
@@ -119,7 +146,7 @@ left_bracket:
 skip_right_bracket_from_left_bracket:
   inc rcx
   cmp byte [buf+rcx-1], '['
-  je inc_num_to_match_right_bracket 
+  je inc_num_to_match_right_bracket
   cmp byte [buf+rcx-1], ']'
   je check_matching_right_bracket
   jmp skip_right_bracket_from_left_bracket
@@ -142,33 +169,10 @@ right_bracket:
   cmp rcx, [bufsize]
   jle _execute_code_loop
   ret
-; _get_path:
-;   mov rax, 0
-;   mov rdi, 0
-;   mov rsi, path
-;   mov rdx, 16
-;   syscall
-;   ret
-;
-; _print_path_req:
-;   mov rax, 1 ; sys_write
-;   mov rdi, 1 ; stdout
-;   mov rsi, path_req ; pointer to path_req
-;   mov rdx, path_req_len ; length of path_req
-;   syscall
-;   ret
-;
-; _print_path:
-;   mov rax, 1
-;   mov rdi, 1
-;   mov rsi, path
-;   mov rdx, 16
-;   syscall
-;   ret
 
 _open_file:
   mov rax, 2 ; sys_open
-  mov rdi, test_filename ; open path
+  ;mov rdi, bf_file ; open path (set earlier)
   mov rsi, O_RDONLY ; read-only
   mov rdx, 0644o
   syscall
@@ -178,7 +182,7 @@ _open_file:
 _read_file_data:
   mov rax, 0 ; sys_read
   mov rdi, [fd_in] ; file descriptor of file in _open_file
-  mov rsi, buf 
+  mov rsi, buf
   mov rdx, [bufsize]
   syscall
   ret
