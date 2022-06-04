@@ -1,9 +1,8 @@
 section .data
   path_req db "path of file: "
   path_req_len equ $-path_req
-  test_filename db "test.bf", 0x0
-
-  bufsize dw 1024
+  test_filename db "hello.bf", 0x0
+bufsize dw 1024
 
   O_RDONLY equ 0
   O_WRONLY equ 1
@@ -23,11 +22,17 @@ section .bss
 
   cells resb NUM_CELLS
 
+  left_bracket_stack resb 32
+  left_bracket_sp    resb 1
+
+  num_to_match_right_bracket resb 1
+
 section .text
   global _start ; define entrypoint for ld
 
 _start:
-  mov byte [in_brackets], 0
+  mov byte [left_bracket_sp], 0
+  mov byte [num_to_match_right_bracket], 0
 
   call _open_file
   call _read_file_data
@@ -102,10 +107,38 @@ input:
   jle _execute_code_loop
   ret
 left_bracket:
+  cmp byte [cells + r8], 0
+  ; je skip_right_bracket_loop
+  je skip_right_bracket_from_left_bracket
+  mov rbx, [left_bracket_sp]
+  mov [left_bracket_stack + rbx], rcx
+  inc byte [left_bracket_sp]
   cmp rcx, [bufsize]
   jle _execute_code_loop
   ret
+skip_right_bracket_from_left_bracket:
+  inc rcx
+  cmp byte [buf+rcx-1], '['
+  je inc_num_to_match_right_bracket 
+  cmp byte [buf+rcx-1], ']'
+  je check_matching_right_bracket
+  jmp skip_right_bracket_from_left_bracket
+inc_num_to_match_right_bracket:
+  inc byte [num_to_match_right_bracket]
+  jmp skip_right_bracket_from_left_bracket
+check_matching_right_bracket:
+  cmp byte [num_to_match_right_bracket], 0
+  jne dec_matching_right_bracket
+  jmp _execute_code_loop
+dec_matching_right_bracket:
+  dec byte [num_to_match_right_bracket]
+  jmp skip_right_bracket_from_left_bracket
 right_bracket:
+  mov rbx, [left_bracket_sp]
+  mov rcx, 0
+  mov cl, byte [left_bracket_stack + rbx - 1] ; set cl to 000000...byte
+  dec byte [left_bracket_sp]
+  dec rcx ; gets incremented again at the beginning of the loop
   cmp rcx, [bufsize]
   jle _execute_code_loop
   ret
