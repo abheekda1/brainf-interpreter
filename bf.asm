@@ -1,5 +1,5 @@
 section .data
-  not_enough_arg_text db "please add the bf path as an argument!",0x0,0x0a
+  not_enough_arg_text db "please add the bf path as an argument!",0xa,0x0
   not_enough_arg_len equ $-not_enough_arg_text ; 40
   bufsize dw 2048
 
